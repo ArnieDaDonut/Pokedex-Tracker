@@ -4,7 +4,7 @@ This project contains a modified version of Pokémon FireRed that features a bui
 
 ## Features
 
-- **In-Game Toggle**: Press the **L Button** at any point in the overworld to toggle the tracker UI on or off.
+- **In-Game Toggle**: Hold the **B Button** and press **Select** at any point in the overworld to toggle the tracker UI on or off.
 - **Real-Time Data**: Tracks your **Caught** and **Seen** Kanto Pokédex progress using native game functions.
 - **Native UI**: Uses the same window templates and fonts as the base game to look like a fully integrated feature.
 - **Auto-Refresh**: Automatically refreshes and persists when entering/exiting menus or finishing battles. 
@@ -14,7 +14,7 @@ This project contains a modified version of Pokémon FireRed that features a bui
 1. Open your Game Boy Advance emulator of choice (e.g., **Visual Boy Advance (VBA)**, mGBA).
 2. Load the compiled custom ROM file located at: `pokefirered/pokefirered.gba`.
 3. Start the game.
-4. **Usage**: Once you are in the overworld and have the Pokédex, simply press the **L Button** to open the tracker HUD. Press **L** again to close it.
+4. **Usage**: Once you are in the overworld and have the Pokédex, simply hold the **B Button** and press **Select** to open the tracker HUD. Press the same combination again to close it.
 
 ## For Developers: Building the ROM
 
