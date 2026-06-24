@@ -26,6 +26,8 @@
 #include "naming_screen.h"
 #include "sound.h"
 #include "constants/songs.h"
+#include "item.h"
+#include "constants/items.h"
 
 // 386 for National Dex
 #define MAX_DEX_MONS 386
@@ -44,6 +46,7 @@ struct PokedexTrackerState
     u8 searchQuery[12];
     bool8 searchFocus;
     u8 cursorCol;
+    u16 notYetTimer;
 };
 
 static struct PokedexTrackerState *sTracker;
@@ -66,6 +69,7 @@ static const u8 sText_StatusColumn[] = _("STATUS");
 static const u8 sText_MarkCaught[] = _("{COLOR GREEN}O");
 static const u8 sText_MarkNotCaught[] = _("{COLOR RED}X");
 static const u8 sText_LocationBtn[] = _("{COLOR WHITE}{SHADOW LIGHT_GRAY}{HIGHLIGHT BLUE} LOCATION ");
+static const u8 sText_NotYet[] = _("{COLOR LIGHT_RED}{SHADOW LIGHT_GRAY}{HIGHLIGHT BLUE} NOT YET! ");
 
 static const struct BgTemplate sTrackerBgTemplates[] =
 {
@@ -1166,6 +1170,16 @@ static void Task_TrackerMain(u8 taskId)
     if (gPaletteFade.active)
         return;
 
+    if (sTracker->notYetTimer > 0)
+    {
+        sTracker->notYetTimer--;
+        if (sTracker->notYetTimer == 0)
+        {
+            Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
+        }
+        return;
+    }
+
     if (sTracker->searchFocus)
     {
         if (JOY_NEW(DPAD_DOWN) && sTracker->totalItems > 0)
@@ -1214,6 +1228,32 @@ static void Task_TrackerMain(u8 taskId)
                     PlaySE(SE_SELECT);
                     Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
                 }
+                else if (JOY_NEW(A_BUTTON) && sTracker->cursorCol == 1)
+                {
+                    u16 listIdx = scrollOffset + cursorRow;
+                    if (listIdx < sTracker->totalItems)
+                    {
+                        u16 natDex = sTracker->listItems[listIdx].index;
+                        if (natDex <= 386)
+                        {
+                            if (CheckBagHasItem(ITEM_TOWN_MAP, 1) == FALSE)
+                            {
+                                u16 custom_y = 24 + (cursorRow * 28);
+                                PlaySE(SE_BOO);
+                                AddTextPrinterParameterized(sTracker->windowId, 1, sText_NotYet, 105, custom_y, 0xFF, NULL);
+                                CopyWindowToVram(sTracker->windowId, COPYWIN_GFX);
+                                sTracker->notYetTimer = 120;
+                            }
+                            else
+                            {
+                                PlaySE(SE_SELECT);
+                                BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+                                sTracker->state = 3;
+                            }
+                        }
+                    }
+                    return;
+                }
             }
             ListMenu_ProcessInput(sTracker->listMenuTaskId);
         }
@@ -1238,6 +1278,11 @@ static void Task_TrackerMain(u8 taskId)
         {
             CleanupTracker(taskId);
             DoNamingScreen(NAMING_SCREEN_BOX, sTracker->searchQuery, 0, 0, 0, CB2_InitPokedexTrackerScreen);
+        }
+        else if (sTracker->state == 3)
+        {
+            CleanupTracker(taskId);
+            InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_InitPokedexTrackerScreen);
         }
     }
 }
