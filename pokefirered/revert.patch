@@ -1,0 +1,149 @@
+--- src/pokedex_tracker_screen.c
++++ src/pokedex_tracker_screen.c
+@@ -21,8 +21,6 @@
+ #include "constants/songs.h"
+ #include "palette.h"
+ #include "decompress.h"
+-#include "item.h"
+-#include "constants/items.h"
++#include "pokedex_area_markers.h"
+ 
+ // 386 for National Dex
+ #define MAX_DEX_MONS 386
+@@ -38,6 +36,10 @@
+     STATE_NAMING_SCREEN,
+     STATE_MAP_SCREEN
+ };
++
++extern const u32 sTilemap_AreaMap_Kanto[];
++extern const u16 sKantoDexPalette[];
++extern const u32 sKantoDexTiles[];
+ 
+ struct PokedexTrackerState
+ {
+@@ -74,8 +76,8 @@
+ static bool8 StringStartsWith(const u8 *str, const u8 *prefix);
+ 
+ static const u8 sText_Empty[] = _("");
+-static const u8 sText_Location[] = _("{COLOR LIGHT_BLUE}LOCATION");
+-static const u8 sText_NotYet[] = _("{COLOR LIGHT_RED}Not Yet!");
+ static const u8 sText_Search[] = _("{COLOR WHITE}Search: {COLOR LIGHT_BLUE}");
+ static const u8 sText_ColorRed[] = _("{COLOR RED}");
+ static const u8 sText_Cursor[] = _("{RIGHT_ARROW}");
+@@ -102,6 +104,15 @@
+         .paletteMode = 0,
+         .priority = 1,
+         .baseTile = 0
++    },
++    {
++        .bg = 2,
++        .charBaseIndex = 2,
++        .mapBaseIndex = 29,
++        .screenSize = 0,
++        .paletteMode = 0,
++        .priority = 0, // Draw on top of list
++        .baseTile = 0
+     }
+ };
+ 
+@@ -118,6 +129,16 @@
+     },
+     DUMMY_WIN_TEMPLATE
+ };
++
++static const struct WindowTemplate sWindowTemplate_AreaMap_Kanto =
++{
++    .bg = 2,
++    .tilemapLeft = 17,
++    .tilemapTop = 3,
++    .width = 12,
++    .height = 9,
++    .paletteNum = 11,
++    .baseBlock = 601
++};
+ 
+ static const struct ListMenuTemplate sTrackerListMenuTemplate =
+@@ -1259,17 +1280,10 @@
+         {
+             if (sTracker->cursorCol == 1) // LOCATION button
+             {
+-                if (CheckBagHasItem(ITEM_TOWN_MAP, 1))
+-                {
+-                    sTracker->state = STATE_MAP_SCREEN;
+-                    sTracker->selectedItem = cursorRow + scrollOffset;
+-                    PlaySE(SE_SELECT);
+-                    return;
+-                }
+-                else
+-                {
+-                    PlaySE(SE_BOO);
+-                }
++                sTracker->state = STATE_MAP_SCREEN;
++                sTracker->selectedItem = cursorRow + scrollOffset;
++                PlaySE(SE_SELECT);
++                return;
+             }
+         }
+ 
+@@ -1292,8 +1306,35 @@
+         }
+         else if (sTracker->state == STATE_MAP_SCREEN)
+         {
+-            CleanupTracker(taskId);
+-            InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_InitPokedexTrackerScreen);
++            // Clear the list and search bar
++            HideBg(1);
++            
++            // Draw Map Background
++            sTracker->mapWindowId = AddWindow(&sWindowTemplate_AreaMap_Kanto);
++            FillWindowPixelBuffer(sTracker->mapWindowId, PIXEL_FILL(0));
++            CopyToWindowPixelBuffer(sTracker->mapWindowId, (void *)sTilemap_AreaMap_Kanto, 0, 0);
++            PutWindowTilemap(sTracker->mapWindowId);
++            CopyWindowToVram(sTracker->mapWindowId, COPYWIN_GFX);
++            
++            // Load Map Graphics
++            LoadBgTiles(2, sKantoDexTiles, 0, 0);
++            LoadPalette(sKantoDexPalette, BG_PLTT_ID(11), 0x20);
++            ShowBg(2);
++            
++            // Spawn markers
++            {
++                u16 species = NationalPokedexNumToSpecies(sTracker->listItems[sTracker->selectedItem].index);
++                sTracker->mapMarkerTaskId = CreatePokedexAreaMarkers(species, 2001, 10, 0);
++            }
++            
++            // Go to map interaction state
++            sTracker->state = 10;
++        }
++        else if (sTracker->state == 10)
++        {
++            // Inside Map Screen
++            if (JOY_NEW(A_BUTTON | B_BUTTON))
++            {
++                PlaySE(SE_SELECT);
++                
++                // Destroy markers
++                DestroyPokedexAreaMarkers(sTracker->mapMarkerTaskId);
++                
++                // Hide map
++                RemoveWindow(sTracker->mapWindowId);
++                HideBg(2);
++                
++                // Show list again
++                ShowBg(1);
++                
++                // Restore state
++                sTracker->state = 2; // STATE_LIST
++            }
+         }
+     }
+ }
+@@ -1355,14 +1396,8 @@
+             AddTextPrinterParameterized(sTracker->windowId, 1, gSpeciesNames[species], 40, custom_y, 0xFF, NULL);
+ 
+             // Print LOCATION Button
+             if (natDex <= 386)
+                 AddTextPrinterParameterized(sTracker->windowId, 1, sText_LocationBtn, 105, custom_y, 0xFF, NULL);
+             else
+                 AddTextPrinterParameterized(sTracker->windowId, 1, sText_Unknown, 105, custom_y, 0xFF, NULL);
+ 

@@ -43,6 +43,7 @@ struct PokedexTrackerState
     u32 totalItems;
     u8 searchQuery[12];
     bool8 searchFocus;
+    u8 cursorCol;
 };
 
 static struct PokedexTrackerState *sTracker;
@@ -64,6 +65,7 @@ static const u8 sText_Search[] = _("SEARCH: ");
 static const u8 sText_StatusColumn[] = _("STATUS");
 static const u8 sText_MarkCaught[] = _("{COLOR GREEN}O");
 static const u8 sText_MarkNotCaught[] = _("{COLOR RED}X");
+static const u8 sText_LocationBtn[] = _("{COLOR WHITE}{SHADOW LIGHT_GRAY}{HIGHLIGHT BLUE} LOCATION ");
 
 static const struct BgTemplate sTrackerBgTemplates[] =
 {
@@ -109,7 +111,7 @@ static const struct ListMenuTemplate sTrackerListMenuTemplate =
     .cursorShadowPal = 3,
     .lettersSpacing = 0,
     .itemVerticalPadding = 0,
-    .scrollMultiple = LIST_MULTIPLE_SCROLL_DPAD,
+    .scrollMultiple = LIST_MULTIPLE_SCROLL_L_R,
     .fontId = 1,
     .cursorKind = 1
 };
@@ -1027,6 +1029,7 @@ void CB2_InitPokedexTrackerScreen(void)
             sTracker = AllocZeroed(sizeof(*sTracker));
             sTracker->searchQuery[0] = 0xFF; // empty string
             sTracker->searchFocus = TRUE;    // start focused on search
+            sTracker->cursorCol = 0;
         }
         else
         {
@@ -1191,11 +1194,27 @@ static void Task_TrackerMain(u8 taskId)
         if (JOY_NEW(DPAD_UP) && scrollOffset == 0 && cursorRow == 0)
         {
             sTracker->searchFocus = TRUE;
+            sTracker->cursorCol = 0;
             PlaySE(SE_SELECT);
             Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
         }
         else
         {
+            if (!sTracker->searchFocus)
+            {
+                if (JOY_NEW(DPAD_RIGHT) && sTracker->cursorCol < 1)
+                {
+                    sTracker->cursorCol++;
+                    PlaySE(SE_SELECT);
+                    Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
+                }
+                else if (JOY_NEW(DPAD_LEFT) && sTracker->cursorCol > 0)
+                {
+                    sTracker->cursorCol--;
+                    PlaySE(SE_SELECT);
+                    Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
+                }
+            }
             ListMenu_ProcessInput(sTracker->listMenuTaskId);
         }
 
@@ -1275,21 +1294,18 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
             // Draw Cursor
             if (!sTracker->searchFocus && i == cursorRow)
             {
-                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Cursor, 0, custom_y, 0xFF, NULL);
+                u8 cursorX = (sTracker->cursorCol == 0) ? 0 : 95;
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Cursor, cursorX, custom_y, 0xFF, NULL);
             }
 
             // Print Pokemon Name
             AddTextPrinterParameterized(sTracker->windowId, 1, gSpeciesNames[species], 40, custom_y, 0xFF, NULL);
 
             // Print Location
-            // Location Text
-            ptr = StringCopy(text, sText_ColorRed);
             if (natDex <= 386)
-                StringCopy(ptr, sPokemonLocations[natDex]);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_LocationBtn, 105, custom_y, 0xFF, NULL);
             else
-                StringCopy(ptr, sText_Unknown);
-
-            AddTextPrinterParameterized(sTracker->windowId, 1, text, 105, custom_y, 0xFF, NULL);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Unknown, 105, custom_y, 0xFF, NULL);
 
             // Status Mark
             if (GetSetPokedexFlag(natDex, FLAG_GET_CAUGHT))
