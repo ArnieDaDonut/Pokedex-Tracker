@@ -61,6 +61,9 @@ static const u8 sText_Unknown[] = _("{COLOR RED}UNKNOWN");
 static const u8 sText_ColorRed[] = _("{COLOR RED}");
 static const u8 sText_Cursor[] = _("{RIGHT_ARROW}");
 static const u8 sText_Search[] = _("SEARCH: ");
+static const u8 sText_StatusColumn[] = _("STATUS");
+static const u8 sText_MarkCaught[] = _("{COLOR GREEN}O");
+static const u8 sText_MarkNotCaught[] = _("{COLOR RED}X");
 
 static const struct BgTemplate sTrackerBgTemplates[] =
 {
@@ -1249,6 +1252,7 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
             AddTextPrinterParameterized(sTracker->windowId, 1, sText_Cursor, 0, 2, 0xFF, NULL);
             
         AddTextPrinterParameterized(sTracker->windowId, 1, searchText, 16, 2, 0xFF, NULL);
+        AddTextPrinterParameterized(sTracker->windowId, 1, sText_StatusColumn, 180, 2, 0xFF, NULL);
     }
 
     for (i = 0; i < 4; i++)
@@ -1278,19 +1282,24 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
             AddTextPrinterParameterized(sTracker->windowId, 1, gSpeciesNames[species], 40, custom_y, 0xFF, NULL);
 
             // Print Location
+            // Location Text
+            ptr = StringCopy(text, sText_ColorRed);
+            if (natDex <= 386)
+                StringCopy(ptr, sPokemonLocations[natDex]);
+            else
+                StringCopy(ptr, sText_Unknown);
+
+            AddTextPrinterParameterized(sTracker->windowId, 1, text, 105, custom_y, 0xFF, NULL);
+
+            // Status Mark
             if (GetSetPokedexFlag(natDex, FLAG_GET_CAUGHT))
             {
-                StringCopy(text, sText_Caught);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_MarkCaught, 195, custom_y, 0xFF, NULL);
             }
             else
             {
-                ptr = StringCopy(text, sText_ColorRed);
-                if (natDex <= 386)
-                    StringCopy(ptr, sPokemonLocations[natDex]);
-                else
-                    StringCopy(ptr, sText_Unknown);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_MarkNotCaught, 195, custom_y, 0xFF, NULL);
             }
-            AddTextPrinterParameterized(sTracker->windowId, 1, text, 128, custom_y, 0xFF, NULL);
 
             // Screen X=32, Screen Y=8 (window) + custom_y + 8 (center of 16px text)
             sTracker->monIconSpriteIds[i] = CreateMonIcon(species, SpriteCallbackDummy, 32, 8 + custom_y + 8, 0, 0xFFFFFFFF, FALSE);
