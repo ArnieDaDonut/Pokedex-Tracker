@@ -5,4 +5,6 @@
 
 void CB2_InitPokedexTrackerScreen(void);
 
+extern u16 gTrackerMapSpecies;
+
 #endif // GUARD_POKEDEX_TRACKER_SCREEN_H

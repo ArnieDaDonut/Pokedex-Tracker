@@ -17,9 +17,9 @@ struct RoamerPair
 
 static s32 GetRoamerIndex(u16 species);
 static s32 GetRoamerPokedexAreaMarkers(u16 species, struct Subsprite * subsprites);
-static bool32 IsSpeciesOnMap(const struct WildPokemonHeader * data, s32 species);
+bool32 IsSpeciesOnMap(const struct WildPokemonHeader * data, s32 species);
 static bool32 IsSpeciesInEncounterTable(const struct WildPokemonInfo * pokemon, s32 species, s32 count);
-static u16 GetMapSecIdFromWildMonHeader(const struct WildPokemonHeader * header);
+u16 GetMapSecIdFromWildMonHeader(const struct WildPokemonHeader * header);
 static bool32 FindDexAreaByMapSec(u16 mapSecId, const u16 (*lut)[2], s32 count, s32 * lutIdx_p, u16 * tableIdx_p);
 
 static const u16 sDexAreas_Kanto[][2] = {
@@ -259,7 +259,7 @@ static s32 GetRoamerPokedexAreaMarkers(u16 species, struct Subsprite * subsprite
     return 0;
 }
 
-static bool32 IsSpeciesOnMap(const struct WildPokemonHeader * data, s32 species)
+bool32 IsSpeciesOnMap(const struct WildPokemonHeader * data, s32 species)
 {
     if (IsSpeciesInEncounterTable(data->landMonsInfo, species, LAND_WILD_COUNT))
         return TRUE;
@@ -293,7 +293,7 @@ static bool32 IsSpeciesInEncounterTable(const struct WildPokemonInfo * info, s32
     return FALSE;
 }
 
-static u16 GetMapSecIdFromWildMonHeader(const struct WildPokemonHeader * header)
+u16 GetMapSecIdFromWildMonHeader(const struct WildPokemonHeader * header)
 {
     return Overworld_GetMapHeaderByGroupAndId(header->mapGroup, header->mapNum)->regionMapSectionId;
 }

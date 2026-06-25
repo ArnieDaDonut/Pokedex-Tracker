@@ -47,9 +47,12 @@ struct PokedexTrackerState
     bool8 searchFocus;
     u8 cursorCol;
     u16 notYetTimer;
+    u16 savedScrollOffset;
+    u16 savedCursorRow;
 };
 
 static struct PokedexTrackerState *sTracker;
+u16 gTrackerMapSpecies;
 
 static void CB2_TrackerMain(void);
 static void VBlankCB_Tracker(void);
@@ -65,6 +68,8 @@ static const u8 sText_Unknown[] = _("{COLOR RED}UNKNOWN");
 static const u8 sText_ColorRed[] = _("{COLOR RED}");
 static const u8 sText_Cursor[] = _("{RIGHT_ARROW}");
 static const u8 sText_Search[] = _("SEARCH: ");
+static const u8 sText_CaughtLabel[] = _("CAUGHT: ");
+static const u8 sText_RequiredLabel[] = _(" / REQUIRED: ");
 static const u8 sText_StatusColumn[] = _("STATUS");
 static const u8 sText_MarkCaught[] = _("{COLOR GREEN}O");
 static const u8 sText_MarkNotCaught[] = _("{COLOR RED}X");
@@ -1034,10 +1039,13 @@ void CB2_InitPokedexTrackerScreen(void)
             sTracker->searchQuery[0] = 0xFF; // empty string
             sTracker->searchFocus = TRUE;    // start focused on search
             sTracker->cursorCol = 0;
+            sTracker->savedScrollOffset = 0;
+            sTracker->savedCursorRow = 0;
         }
         else
         {
             sTracker->state = 0; // Reset state when returning from naming screen
+            gTrackerMapSpecies = SPECIES_NONE;
         }
         {
             u32 i;
@@ -1102,10 +1110,20 @@ void CB2_InitPokedexTrackerScreen(void)
         template.totalItems = validCount;
         template.items = sTracker->listItems;
         template.windowId = sTracker->windowId;
-        
+        template.header_X = 0;
+        template.item_X = 8;
+        template.cursor_X = 0;
+        template.upText_Y = 1;
+        template.cursorPal = 2;
+        template.fillValue = 1;
+        template.cursorShadowPal = 3;
+        template.lettersSpacing = 0;
+        template.itemVerticalPadding = 0;
+        template.scrollMultiple = 0;
+        template.fontId = 1;
+        template.cursorKind = 0;
         sTracker->totalItems = validCount;
-
-        sTracker->listMenuTaskId = ListMenuInit(&template, 0, 0);
+        sTracker->listMenuTaskId = ListMenuInit(&template, sTracker->savedScrollOffset, sTracker->savedCursorRow);
         gMain.state++;
         break;
     }
@@ -1149,6 +1167,7 @@ static void CleanupTracker(u8 taskId)
     u32 i;
     if (sTracker->listMenuTaskId != 0xFF)
     {
+        ListMenuGetScrollAndRow(sTracker->listMenuTaskId, &sTracker->savedScrollOffset, &sTracker->savedCursorRow);
         DestroyListMenuTask(sTracker->listMenuTaskId, NULL, NULL);
         sTracker->listMenuTaskId = 0xFF;
         for (i = 0; i < 4; i++)
@@ -1248,6 +1267,7 @@ static void Task_TrackerMain(u8 taskId)
                             {
                                 PlaySE(SE_SELECT);
                                 BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+                                gTrackerMapSpecies = NationalPokedexNumToSpecies(natDex);
                                 sTracker->state = 3;
                             }
                         }
@@ -1317,6 +1337,34 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
             
         AddTextPrinterParameterized(sTracker->windowId, 1, searchText, 16, 2, 0xFF, NULL);
         AddTextPrinterParameterized(sTracker->windowId, 1, sText_StatusColumn, 180, 2, 0xFF, NULL);
+    }
+    
+    // Draw Stats (Caught / Required)
+    {
+        u32 j;
+        u16 caught = 0;
+        u16 required = 0;
+        u8 statsText[64];
+        u8 *ptr;
+
+        for (j = 1; j <= 151; j++)
+        {
+            if (IsFireRedPokemon(j))
+            {
+                required++;
+                if (GetSetPokedexFlag(j, FLAG_GET_CAUGHT))
+                    caught++;
+            }
+        }
+        
+        required = required - caught;
+        
+        ptr = StringCopy(statsText, sText_CaughtLabel);
+        ptr = ConvertIntToDecimalStringN(ptr, caught, STR_CONV_MODE_LEFT_ALIGN, 3);
+        ptr = StringCopy(ptr, sText_RequiredLabel);
+        ptr = ConvertIntToDecimalStringN(ptr, required, STR_CONV_MODE_LEFT_ALIGN, 3);
+
+        AddTextPrinterParameterized(sTracker->windowId, 1, statsText, 16, 126, 0xFF, NULL);
     }
 
     for (i = 0; i < 4; i++)

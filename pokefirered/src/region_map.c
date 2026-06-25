@@ -16,6 +16,10 @@
 #include "constants/region_map_sections.h"
 #include "constants/heal_locations.h"
 #include "constants/maps.h"
+#include "pokedex_tracker_screen.h"
+#include "pokemon_icon.h"
+#include "wild_encounter.h"
+#include "wild_pokemon_area.h"
 
 #define MAP_WIDTH 22
 #define MAP_HEIGHT 15
@@ -983,6 +987,53 @@ static void InitRegionMap(u8 type)
         SetMainCallback2(CB2_OpenRegionMap);
     }
 }
+static u8 sTrackerIconSpriteIds[32];
+static u8 sTrackerIconSpriteCount;
+
+static void CreatePokemonTrackerIcons(void)
+{
+    u32 i;
+    u8 drawnMapsecs[MAPSEC_COUNT] = {0};
+
+    sTrackerIconSpriteCount = 0;
+    if (gTrackerMapSpecies == SPECIES_NONE)
+        return;
+
+    LoadMonIconPalettes();
+
+    for (i = 0; gWildMonHeaders[i].mapGroup != MAP_GROUP(MAP_UNDEFINED); i++)
+    {
+        if (IsSpeciesOnMap(&gWildMonHeaders[i], gTrackerMapSpecies))
+        {
+            u8 mapsec = GetMapSecIdFromWildMonHeader(&gWildMonHeaders[i]);
+            if (mapsec >= KANTO_MAPSEC_START && mapsec < MAPSEC_COUNT && !drawnMapsecs[mapsec])
+            {
+                drawnMapsecs[mapsec] = 1;
+                if (sTrackerIconSpriteCount < 32)
+                {
+                    u8 mapX = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][0];
+                    u8 mapY = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][1];
+                    u16 x_pixel = 8 * mapX + 36;
+                    u16 y_pixel = 8 * mapY + 28;
+                    sTrackerIconSpriteIds[sTrackerIconSpriteCount++] = CreateMonIcon(gTrackerMapSpecies, SpriteCallbackDummy, x_pixel, y_pixel, 0, 0xFFFFFFFF, FALSE);
+                    gSprites[sTrackerIconSpriteIds[sTrackerIconSpriteCount - 1]].oam.priority = 2;
+                }
+            }
+        }
+    }
+}
+
+static void FreePokemonTrackerIcons(void)
+{
+    u8 i;
+    for (i = 0; i < sTrackerIconSpriteCount; i++)
+    {
+        DestroyMonIcon(&gSprites[sTrackerIconSpriteIds[i]]);
+    }
+    if (sTrackerIconSpriteCount > 0)
+        FreeMonIconPalettes();
+    sTrackerIconSpriteCount = 0;
+}
 
 void InitRegionMapWithExitCB(u8 type, MainCallback cb)
 {
@@ -1187,6 +1238,7 @@ static void Task_RegionMap(u8 taskId)
         InitMapIcons(GetSelectedRegionMap(), taskId, sRegionMap->mainTask);
         CreateMapCursor(0, 0);
         CreatePlayerIcon(1, 1);
+        CreatePokemonTrackerIcons();
         sRegionMap->mainState++;
         break;
     case 1:
@@ -1324,6 +1376,7 @@ static void FreeRegionMap(u8 taskId)
     FreeMapIcons();
     FreeMapCursor();
     FreePlayerIcon();
+    FreePokemonTrackerIcons();
     FreeAndResetGpuRegs();
     DestroyTask(taskId);
     FreeAllWindowBuffers();
