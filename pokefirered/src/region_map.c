@@ -20,6 +20,7 @@
 #include "pokemon_icon.h"
 #include "wild_encounter.h"
 #include "wild_pokemon_area.h"
+#include "tracker_manual_locations.h"
 
 #define MAP_WIDTH 22
 #define MAP_HEIGHT 15
@@ -990,6 +991,70 @@ static void InitRegionMap(u8 type)
 static u8 sTrackerIconSpriteIds[32];
 static u8 sTrackerIconSpriteCount;
 
+static void GetKantoMapsecCoordinates(u8 mapsec, u8 *mapX, u8 *mapY)
+{
+    *mapX = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][0];
+    *mapY = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][1];
+
+    if (*mapX != 0 || *mapY != 0)
+        return;
+
+    switch (mapsec)
+    {
+        case MAPSEC_VIRIDIAN_FOREST:
+            *mapX = 4; *mapY = 6;
+            break;
+        case MAPSEC_MT_MOON:
+            *mapX = 7; *mapY = 3;
+            break;
+        case MAPSEC_DIGLETTS_CAVE:
+            *mapX = 4; *mapY = 7;
+            break;
+        case MAPSEC_KANTO_VICTORY_ROAD:
+            *mapX = 2; *mapY = 5;
+            break;
+        case MAPSEC_POKEMON_MANSION:
+            *mapX = 4; *mapY = 14;
+            break;
+        case MAPSEC_KANTO_SAFARI_ZONE:
+            *mapX = 12; *mapY = 12;
+            break;
+        case MAPSEC_ROCK_TUNNEL:
+            *mapX = 18; *mapY = 4;
+            break;
+        case MAPSEC_SEAFOAM_ISLANDS:
+            *mapX = 9; *mapY = 14;
+            break;
+        case MAPSEC_POKEMON_TOWER:
+            *mapX = 18; *mapY = 6;
+            break;
+        case MAPSEC_CERULEAN_CAVE:
+            *mapX = 14; *mapY = 3;
+            break;
+        case MAPSEC_POWER_PLANT:
+            *mapX = 18; *mapY = 5;
+            break;
+        case MAPSEC_S_S_ANNE:
+            *mapX = 14; *mapY = 9;
+            break;
+        case MAPSEC_UNDERGROUND_PATH:
+            *mapX = 14; *mapY = 5;
+            break;
+        case MAPSEC_UNDERGROUND_PATH_2:
+            *mapX = 15; *mapY = 6;
+            break;
+        case MAPSEC_ROCKET_HIDEOUT:
+            *mapX = 11; *mapY = 6;
+            break;
+        case MAPSEC_SILPH_CO:
+            *mapX = 14; *mapY = 6;
+            break;
+        case MAPSEC_POKEMON_LEAGUE:
+            *mapX = 2; *mapY = 3;
+            break;
+    }
+}
+
 static void CreatePokemonTrackerIcons(void)
 {
     u32 i;
@@ -1006,15 +1071,39 @@ static void CreatePokemonTrackerIcons(void)
         if (IsSpeciesOnMap(&gWildMonHeaders[i], gTrackerMapSpecies))
         {
             u8 mapsec = GetMapSecIdFromWildMonHeader(&gWildMonHeaders[i]);
-            if (mapsec >= KANTO_MAPSEC_START && mapsec < MAPSEC_COUNT && !drawnMapsecs[mapsec])
+            if (mapsec >= KANTO_MAPSEC_START && mapsec <= MAPSEC_POWER_PLANT && !drawnMapsecs[mapsec])
             {
                 drawnMapsecs[mapsec] = 1;
                 if (sTrackerIconSpriteCount < 32)
                 {
-                    u8 mapX = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][0];
-                    u8 mapY = sMapSectionTopLeftCorners[mapsec - KANTO_MAPSEC_START][1];
-                    u16 x_pixel = 8 * mapX + 36;
-                    u16 y_pixel = 8 * mapY + 28;
+                    u8 mapX, mapY;
+                    u16 x_pixel, y_pixel;
+                    GetKantoMapsecCoordinates(mapsec, &mapX, &mapY);
+                    x_pixel = 8 * mapX + 36;
+                    y_pixel = 8 * mapY + 28;
+                    sTrackerIconSpriteIds[sTrackerIconSpriteCount++] = CreateMonIcon(gTrackerMapSpecies, SpriteCallbackDummy, x_pixel, y_pixel, 0, 0xFFFFFFFF, FALSE);
+                    gSprites[sTrackerIconSpriteIds[sTrackerIconSpriteCount - 1]].oam.priority = 2;
+                }
+            }
+        }
+    }
+
+    if (gTrackerMapSpecies < NUM_SPECIES && gSpeciesManualLocations[gTrackerMapSpecies] != NULL)
+    {
+        const u8 *manualLocs = gSpeciesManualLocations[gTrackerMapSpecies];
+        for (i = 0; manualLocs[i] != MAPSEC_NONE; i++)
+        {
+            u8 mapsec = manualLocs[i];
+            if (mapsec >= KANTO_MAPSEC_START && mapsec <= MAPSEC_POWER_PLANT && !drawnMapsecs[mapsec])
+            {
+                drawnMapsecs[mapsec] = 1;
+                if (sTrackerIconSpriteCount < 32)
+                {
+                    u8 mapX, mapY;
+                    u16 x_pixel, y_pixel;
+                    GetKantoMapsecCoordinates(mapsec, &mapX, &mapY);
+                    x_pixel = 8 * mapX + 36;
+                    y_pixel = 8 * mapY + 28;
                     sTrackerIconSpriteIds[sTrackerIconSpriteCount++] = CreateMonIcon(gTrackerMapSpecies, SpriteCallbackDummy, x_pixel, y_pixel, 0, 0xFFFFFFFF, FALSE);
                     gSprites[sTrackerIconSpriteIds[sTrackerIconSpriteCount - 1]].oam.priority = 2;
                 }
@@ -1322,6 +1411,7 @@ static void Task_RegionMap(u8 taskId)
             InitSwitchMapMenu(sRegionMap->selectedRegion, taskId, SaveMainMapTask);
             break;
         case MAP_INPUT_CANCEL:
+            FreePokemonTrackerIcons();
             sRegionMap->mainState++;
             break;
         }

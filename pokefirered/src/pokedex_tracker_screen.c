@@ -25,6 +25,7 @@
 #include "pokemon_icon.h"
 #include "naming_screen.h"
 #include "sound.h"
+#include "constants/sound.h"
 #include "constants/songs.h"
 #include "item.h"
 #include "constants/items.h"
@@ -53,16 +54,20 @@ struct PokedexTrackerState
 
 static struct PokedexTrackerState *sTracker;
 u16 gTrackerMapSpecies;
-
 static void CB2_TrackerMain(void);
 static void VBlankCB_Tracker(void);
 static void Task_TrackerMain(u8 taskId);
 static void Tracker_ItemPrintFunc(u8 windowId, u32 itemId, u8 y);
 static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu *list);
+static u16 sTrackerSavedScrollOffset;
+static u16 sTrackerSavedCursorRow;
+static bool8 sTrackerSavedSearchFocus;
+static u8 sTrackerSavedCursorCol;
 static void CleanupTracker(u8 taskId);
 static bool8 StringStartsWith(const u8 *str, const u8 *prefix);
 
 static const u8 sText_Empty[] = _("");
+static const u8 sText_TrackerTitle[] = _("POKéDEX TRACKER");
 static const u8 sText_Caught[] = _("{COLOR GREEN}CAUGHT");
 static const u8 sText_Unknown[] = _("{COLOR RED}UNKNOWN");
 static const u8 sText_ColorRed[] = _("{COLOR RED}");
@@ -1029,6 +1034,10 @@ void CB2_InitPokedexTrackerScreen(void)
         ResetBgsAndClearDma3BusyFlags(0);
         InitBgsFromTemplates(0, sTrackerBgTemplates, ARRAY_COUNT(sTrackerBgTemplates));
         SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_OBJ_ON | DISPCNT_BG0_ON);
+        {
+            static const u16 blackPal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            LoadPalette(blackPal, 0x1D0, 32);
+        }
         ShowBg(0);
         gMain.state++;
         break;
@@ -1037,10 +1046,10 @@ void CB2_InitPokedexTrackerScreen(void)
         {
             sTracker = AllocZeroed(sizeof(*sTracker));
             sTracker->searchQuery[0] = 0xFF; // empty string
-            sTracker->searchFocus = TRUE;    // start focused on search
-            sTracker->cursorCol = 0;
-            sTracker->savedScrollOffset = 0;
-            sTracker->savedCursorRow = 0;
+            sTracker->searchFocus = sTrackerSavedSearchFocus;
+            sTracker->cursorCol = sTrackerSavedCursorCol;
+            sTracker->savedScrollOffset = sTrackerSavedScrollOffset;
+            sTracker->savedCursorRow = sTrackerSavedCursorRow;
         }
         else
         {
@@ -1168,6 +1177,10 @@ static void CleanupTracker(u8 taskId)
     if (sTracker->listMenuTaskId != 0xFF)
     {
         ListMenuGetScrollAndRow(sTracker->listMenuTaskId, &sTracker->savedScrollOffset, &sTracker->savedCursorRow);
+        sTrackerSavedScrollOffset = sTracker->savedScrollOffset;
+        sTrackerSavedCursorRow = sTracker->savedCursorRow;
+        sTrackerSavedSearchFocus = sTracker->searchFocus;
+        sTrackerSavedCursorCol = sTracker->cursorCol;
         DestroyListMenuTask(sTracker->listMenuTaskId, NULL, NULL);
         sTracker->listMenuTaskId = 0xFF;
         for (i = 0; i < 4; i++)
@@ -1247,12 +1260,20 @@ static void Task_TrackerMain(u8 taskId)
                     PlaySE(SE_SELECT);
                     Tracker_CursorMoveFunc(0, FALSE, (struct ListMenu *)gTasks[sTracker->listMenuTaskId].data);
                 }
-                else if (JOY_NEW(A_BUTTON) && sTracker->cursorCol == 1)
+                else if (JOY_NEW(A_BUTTON))
                 {
                     u16 listIdx = scrollOffset + cursorRow;
                     if (listIdx < sTracker->totalItems)
                     {
                         u16 natDex = sTracker->listItems[listIdx].index;
+                        u16 species = NationalPokedexNumToSpecies(natDex);
+                        
+                        if (sTracker->cursorCol == 0)
+                        {
+                            PlayCry_NormalNoDucking(species, 0, CRY_VOLUME_RS, CRY_PRIORITY_NORMAL);
+                            return;
+                        }
+                        
                         if (natDex <= 386)
                         {
                             if (CheckBagHasItem(ITEM_TOWN_MAP, 1) == FALSE)
@@ -1302,6 +1323,8 @@ static void Task_TrackerMain(u8 taskId)
         else if (sTracker->state == 3)
         {
             CleanupTracker(taskId);
+            Free(sTracker);
+            sTracker = NULL;
             InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_InitPokedexTrackerScreen);
         }
     }
@@ -1314,15 +1337,7 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
     
     if (sTracker == NULL) return;
     
-    if (onInit)
-    {
-        scrollOffset = 0;
-        cursorRow = 0;
-    }
-    else
-    {
-        ListMenuGetScrollAndRow(sTracker->listMenuTaskId, &scrollOffset, &cursorRow);
-    }
+    ListMenuGetScrollAndRow(sTracker->listMenuTaskId, &scrollOffset, &cursorRow);
 
     FillWindowPixelBuffer(sTracker->windowId, PIXEL_FILL(1));
 
@@ -1346,6 +1361,9 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
         u16 required = 0;
         u8 statsText[64];
         u8 *ptr;
+        
+        if (!onInit)
+            PlaySE(SE_SELECT);
 
         for (j = 1; j <= 151; j++)
         {
@@ -1366,7 +1384,8 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
 
         AddTextPrinterParameterized(sTracker->windowId, 1, statsText, 16, 126, 0xFF, NULL);
     }
-
+    FreeMonIconPalettes();
+    
     for (i = 0; i < 4; i++)
     {
         u16 listIdx = scrollOffset + i;
@@ -1387,18 +1406,18 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
             // Draw Cursor
             if (!sTracker->searchFocus && i == cursorRow)
             {
-                u8 cursorX = (sTracker->cursorCol == 0) ? 0 : 95;
-                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Cursor, cursorX, custom_y, 0xFF, NULL);
+                u8 cursor_x = (sTracker->cursorCol == 0) ? 0 : 115;
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Cursor, cursor_x, custom_y, 0xFF, NULL);
             }
 
             // Print Pokemon Name
-            AddTextPrinterParameterized(sTracker->windowId, 1, gSpeciesNames[species], 40, custom_y, 0xFF, NULL);
+            AddTextPrinterParameterized(sTracker->windowId, 1, gSpeciesNames[species], 54, custom_y, 0xFF, NULL);
 
             // Print Location
             if (natDex <= 386)
-                AddTextPrinterParameterized(sTracker->windowId, 1, sText_LocationBtn, 105, custom_y, 0xFF, NULL);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_LocationBtn, 125, custom_y, 0xFF, NULL);
             else
-                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Unknown, 105, custom_y, 0xFF, NULL);
+                AddTextPrinterParameterized(sTracker->windowId, 1, sText_Unknown, 125, custom_y, 0xFF, NULL);
 
             // Status Mark
             if (GetSetPokedexFlag(natDex, FLAG_GET_CAUGHT))
@@ -1410,8 +1429,13 @@ static void Tracker_CursorMoveFunc(s32 itemIndex, bool8 onInit, struct ListMenu 
                 AddTextPrinterParameterized(sTracker->windowId, 1, sText_MarkNotCaught, 195, custom_y, 0xFF, NULL);
             }
 
-            // Screen X=32, Screen Y=8 (window) + custom_y + 8 (center of 16px text)
-            sTracker->monIconSpriteIds[i] = CreateMonIcon(species, SpriteCallbackDummy, 32, 8 + custom_y + 8, 0, 0xFFFFFFFF, FALSE);
+            // Screen X=30, Screen Y=8 (window) + custom_y + 8 (center of 16px text)
+            LoadMonIconPalette(species);
+            sTracker->monIconSpriteIds[i] = CreateMonIcon(species, SpriteCallbackDummy, 30, 8 + custom_y + 8, 0, 0xFFFFFFFF, FALSE);
+            if (!GetSetPokedexFlag(natDex, FLAG_GET_SEEN) && !GetSetPokedexFlag(natDex, FLAG_GET_CAUGHT))
+            {
+                gSprites[sTracker->monIconSpriteIds[i]].oam.paletteNum = 13;
+            }
         }
     }
     CopyWindowToVram(sTracker->windowId, COPYWIN_GFX);

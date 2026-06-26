@@ -21,7 +21,7 @@ endif
 # For gbafix
 MAKER_CODE := 01
 
-BUILD_DIR := build
+BUILD_DIR := buildn
 
 # Version
 ifeq ($(GAME_VERSION),FIRERED)

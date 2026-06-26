@@ -1,11 +1,8 @@
 import re
 
 # Read the file
-with open('/Users/sameetmandewalker/Documents/Pokedex-Tracker/pokemon_firered_locations.md', 'r') as f:
+with open('/Users/sameetmandewalker/Documents/Pokedex-Tracker/firered_locations.md', 'r') as f:
     text = f.read()
-
-# We need to map string locations to MAPSEC_ constants.
-# Let's define a mapping from strings in the file to MAPSEC_.
 
 mapsec_mapping = {
     'Pallet Town': 'MAPSEC_PALLET_TOWN',
@@ -94,30 +91,21 @@ mapsec_mapping = {
     'Five Island': 'MAPSEC_FIVE_ISLAND',
     'Six Island': 'MAPSEC_SIX_ISLAND',
     'Seven Island': 'MAPSEC_SEVEN_ISLAND',
+    
+    'Tanoby Chambers': 'MAPSEC_TANOBY_CHAMBERS',
 }
 
-# Find table rows starting with | #
-matches = re.findall(r'\|\s*#(\d{3})\s*\|\s*\*\*([^\*]+)\*\*\s*\|\s*[^|]+\s*\|\s*([^|]+)\s*\|', text)
+# Find list items like "* Bulbasaur - Pallet Town"
+matches = re.findall(r'\*\s+([A-Za-z.\'♀♂\- ]+)\s+-\s+(.+)', text)
 
 species_data = {}
 for m in matches:
-    num = int(m[0])
-    name = m[1].strip()
-    loc_text = m[2].strip()
-    species_data[num] = (name, loc_text)
-
-out = "const u8 *const gSpeciesManualLocations[152] = {\n"
-
-for i in range(1, 152):
-    if i not in species_data:
-        out += f"    [SPECIES_{i}] = NULL,\n"
-        continue
+    name = m[0].strip()
+    loc_text = m[1].strip()
     
-    name, loc_text = species_data[i]
-    if "Unavailable in wild FireRed" in loc_text or "LeafGreen Exclusive" in loc_text or "Unavailable in FireRed" in loc_text:
-        out += f"    [SPECIES_{i}] = NULL, // {name} (Exclusive/Unavailable)\n"
-        continue
-        
+    # Clean up names for enum e.g. Mr. Mime -> MR_MIME
+    enum_name = name.upper().replace(' ', '_').replace('.', '').replace('-', '_').replace('♀', '_F').replace('♂', '_M').replace('\'', '')
+    
     found_mapsecs = set()
     for key, mapsec in mapsec_mapping.items():
         if re.search(r'\b' + re.escape(key) + r'\b', loc_text, re.IGNORECASE):
@@ -131,17 +119,17 @@ for i in range(1, 152):
             if int(n) <= 25:
                 found_mapsecs.add(f'MAPSEC_ROUTE_{n}')
                 
-    if not found_mapsecs:
-        # e.g. "All waterways" - let's check what to do
-        pass
-        
     if found_mapsecs:
         arr_str = ", ".join(sorted(list(found_mapsecs)))
-        out += f"    /* SPECIES_{name.upper()} */ (const u8[]) {{ {arr_str}, MAPSEC_NONE }},\n"
+        species_data[enum_name] = f"    [SPECIES_{enum_name}] = (const u8[]) {{ {arr_str}, MAPSEC_NONE }},"
     else:
-        out += f"    /* SPECIES_{name.upper()} */ NULL, // Needs manual check: {loc_text}\n"
+        species_data[enum_name] = f"    [SPECIES_{enum_name}] = NULL, // Could not parse: {loc_text}"
 
+out = "#include \"global.h\"\n#include \"constants/region_map_sections.h\"\n#include \"constants/species.h\"\n\n"
+out += "const u8 *const gSpeciesManualLocations[] = {\n"
+for k, v in species_data.items():
+    out += v + "\n"
 out += "};\n"
 
-with open('/Users/sameetmandewalker/Documents/Pokedex-Tracker/pokefirered/scratch_out.txt', 'w') as f:
+with open('/Users/sameetmandewalker/Documents/Pokedex-Tracker/pokefirered/src/tracker_manual_locations.c', 'w') as f:
     f.write(out)
